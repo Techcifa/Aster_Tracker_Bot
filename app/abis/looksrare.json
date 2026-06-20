@@ -1,0 +1,48 @@
+[
+  {
+    "name": "TakerAsk",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      { "name": "nonceInvalidationParameters", "type": "tuple", "indexed": false,
+        "components": [
+          { "name": "orderHash",  "type": "bytes32", "internalType": "bytes32" },
+          { "name": "orderNonce", "type": "uint256", "internalType": "uint256" },
+          { "name": "isNonceInvalidated", "type": "bool", "internalType": "bool" }
+        ]
+      },
+      { "name": "askUser",        "type": "address", "indexed": true },
+      { "name": "bidUser",        "type": "address", "indexed": true },
+      { "name": "strategyId",     "type": "uint256", "indexed": false },
+      { "name": "currency",       "type": "address", "indexed": false },
+      { "name": "collection",     "type": "address", "indexed": false },
+      { "name": "itemIds",        "type": "uint256[]", "indexed": false },
+      { "name": "amounts",        "type": "uint256[]", "indexed": false },
+      { "name": "feeRecipients",  "type": "address[2]", "indexed": false },
+      { "name": "feeAmounts",     "type": "uint256[3]", "indexed": false }
+    ]
+  },
+  {
+    "name": "TakerBid",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      { "name": "nonceInvalidationParameters", "type": "tuple", "indexed": false,
+        "components": [
+          { "name": "orderHash",  "type": "bytes32", "internalType": "bytes32" },
+          { "name": "orderNonce", "type": "uint256", "internalType": "uint256" },
+          { "name": "isNonceInvalidated", "type": "bool", "internalType": "bool" }
+        ]
+      },
+      { "name": "bidUser",        "type": "address", "indexed": true },
+      { "name": "bidRecipient",   "type": "address", "indexed": true },
+      { "name": "strategyId",     "type": "uint256", "indexed": false },
+      { "name": "currency",       "type": "address", "indexed": false },
+      { "name": "collection",     "type": "address", "indexed": false },
+      { "name": "itemIds",        "type": "uint256[]", "indexed": false },
+      { "name": "amounts",        "type": "uint256[]", "indexed": false },
+      { "name": "feeRecipients",  "type": "address[2]", "indexed": false },
+      { "name": "feeAmounts",     "type": "uint256[3]", "indexed": false }
+    ]
+  }
+]

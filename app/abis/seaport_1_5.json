@@ -1,0 +1,38 @@
+[
+  {
+    "name": "OrderFulfilled",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      { "name": "orderHash", "type": "bytes32", "indexed": false, "internalType": "bytes32" },
+      { "name": "offerer",   "type": "address", "indexed": true,  "internalType": "address" },
+      { "name": "zone",      "type": "address", "indexed": true,  "internalType": "address" },
+      { "name": "recipient", "type": "address", "indexed": false, "internalType": "address" },
+      {
+        "name": "offer",
+        "type": "tuple[]",
+        "indexed": false,
+        "internalType": "struct SpentItem[]",
+        "components": [
+          { "name": "itemType",   "type": "uint8",   "internalType": "enum ItemType" },
+          { "name": "token",      "type": "address", "internalType": "address" },
+          { "name": "identifier", "type": "uint256", "internalType": "uint256" },
+          { "name": "amount",     "type": "uint256", "internalType": "uint256" }
+        ]
+      },
+      {
+        "name": "consideration",
+        "type": "tuple[]",
+        "indexed": false,
+        "internalType": "struct ReceivedItem[]",
+        "components": [
+          { "name": "itemType",   "type": "uint8",   "internalType": "enum ItemType" },
+          { "name": "token",      "type": "address", "internalType": "address" },
+          { "name": "identifier", "type": "uint256", "internalType": "uint256" },
+          { "name": "amount",     "type": "uint256", "internalType": "uint256" },
+          { "name": "recipient",  "type": "address", "internalType": "address" }
+        ]
+      }
+    ]
+  }
+]

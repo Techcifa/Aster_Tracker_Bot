@@ -1,0 +1,65 @@
+[
+  {
+    "name": "OrdersMatched",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      { "name": "maker",    "type": "address", "indexed": true,  "internalType": "address" },
+      { "name": "taker",    "type": "address", "indexed": true,  "internalType": "address" },
+      {
+        "name": "sell",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct Order",
+        "components": [
+          { "name": "trader",    "type": "address", "internalType": "address" },
+          { "name": "side",      "type": "uint8",   "internalType": "enum Side" },
+          { "name": "matchingPolicy", "type": "address", "internalType": "address" },
+          { "name": "collection", "type": "address", "internalType": "address" },
+          { "name": "tokenId",   "type": "uint256", "internalType": "uint256" },
+          { "name": "amount",    "type": "uint256", "internalType": "uint256" },
+          { "name": "paymentToken", "type": "address", "internalType": "address" },
+          { "name": "price",     "type": "uint256", "internalType": "uint256" },
+          { "name": "listingTime", "type": "uint256", "internalType": "uint256" },
+          { "name": "expirationTime", "type": "uint256", "internalType": "uint256" },
+          { "name": "fees",      "type": "tuple[]", "internalType": "struct Fee[]",
+            "components": [
+              { "name": "rate",      "type": "uint16",  "internalType": "uint16" },
+              { "name": "recipient", "type": "address", "internalType": "address" }
+            ]
+          },
+          { "name": "salt",      "type": "uint256", "internalType": "uint256" },
+          { "name": "extraParams", "type": "bytes",  "internalType": "bytes" }
+        ]
+      },
+      { "name": "sellHash", "type": "bytes32", "indexed": false, "internalType": "bytes32" },
+      {
+        "name": "buy",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct Order",
+        "components": [
+          { "name": "trader",    "type": "address", "internalType": "address" },
+          { "name": "side",      "type": "uint8",   "internalType": "enum Side" },
+          { "name": "matchingPolicy", "type": "address", "internalType": "address" },
+          { "name": "collection", "type": "address", "internalType": "address" },
+          { "name": "tokenId",   "type": "uint256", "internalType": "uint256" },
+          { "name": "amount",    "type": "uint256", "internalType": "uint256" },
+          { "name": "paymentToken", "type": "address", "internalType": "address" },
+          { "name": "price",     "type": "uint256", "internalType": "uint256" },
+          { "name": "listingTime", "type": "uint256", "internalType": "uint256" },
+          { "name": "expirationTime", "type": "uint256", "internalType": "uint256" },
+          { "name": "fees",      "type": "tuple[]", "internalType": "struct Fee[]",
+            "components": [
+              { "name": "rate",      "type": "uint16",  "internalType": "uint16" },
+              { "name": "recipient", "type": "address", "internalType": "address" }
+            ]
+          },
+          { "name": "salt",      "type": "uint256", "internalType": "uint256" },
+          { "name": "extraParams", "type": "bytes",  "internalType": "bytes" }
+        ]
+      },
+      { "name": "buyHash", "type": "bytes32", "indexed": false, "internalType": "bytes32" }
+    ]
+  }
+]

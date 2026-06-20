@@ -1,0 +1,39 @@
+[
+  {
+    "name": "EvInventory",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      { "name": "itemHash", "type": "bytes32", "indexed": true },
+      { "name": "maker",    "type": "address", "indexed": false },
+      { "name": "taker",    "type": "address", "indexed": false },
+      { "name": "orderSalt","type": "uint256", "indexed": false },
+      { "name": "settleSalt","type": "uint256","indexed": false },
+      { "name": "intent",   "type": "uint256", "indexed": false },
+      { "name": "delegateType","type": "uint256","indexed": false },
+      { "name": "deadline", "type": "uint256", "indexed": false },
+      { "name": "currency", "type": "address", "indexed": false },
+      { "name": "dataMask", "type": "bytes",   "indexed": false },
+      {
+        "name": "item",
+        "type": "tuple",
+        "indexed": false,
+        "components": [
+          { "name": "price",       "type": "uint256", "internalType": "uint256" },
+          { "name": "data",        "type": "bytes",   "internalType": "bytes" }
+        ]
+      },
+      {
+        "name": "detail",
+        "type": "tuple",
+        "indexed": false,
+        "components": [
+          { "name": "op",          "type": "uint8",   "internalType": "uint8" },
+          { "name": "orderIdx",    "type": "uint256", "internalType": "uint256" },
+          { "name": "dataIdx",     "type": "uint256", "internalType": "uint256" },
+          { "name": "cost",        "type": "uint256", "internalType": "uint256" }
+        ]
+      }
+    ]
+  }
+]
