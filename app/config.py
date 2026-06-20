@@ -21,31 +21,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    @model_validator(mode="after")
-    def resolve_webhook_base_url(self) -> Settings:
-        import os
-        public_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
-        static_url = os.environ.get("RAILWAY_STATIC_URL")
-        # Prefer static_url if it starts with https://, otherwise use public_domain
-        resolved = None
-        if static_url and static_url.startswith("https://") and not ".internal" in static_url:
-            resolved = static_url
-        elif public_domain:
-            resolved = f"https://{public_domain}"
-
-        if resolved:
-            is_internal = ".internal" in self.webhook_base_url
-            is_local = "localhost" in self.webhook_base_url or "127.0.0.1" in self.webhook_base_url
-            if not self.webhook_base_url.startswith("https://") or is_internal or is_local:
-                self.webhook_base_url = resolved
-
-        # Rewrite postgresql:// to postgresql+asyncpg:// for async compatibility
-        if self.database_url.startswith("postgresql://"):
-            self.database_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-        return self
-
-
     # ── Telegram ──────────────────────────────────────────────────────────────
     telegram_bot_token: str
     telegram_webhook_secret: str = "local-dev-secret"
@@ -81,6 +56,45 @@ class Settings(BaseSettings):
     @property
     def telegram_webhook_url(self) -> str:
         return f"{self.webhook_base_url}{self.telegram_webhook_path}"
+
+    # ── Post-init resolution ──────────────────────────────────────────────────
+    @model_validator(mode="after")
+    def _resolve_runtime_values(self) -> Settings:
+        import os
+
+        # 1. Resolve webhook_base_url from Railway env vars when not already HTTPS
+        public_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+        static_url = os.environ.get("RAILWAY_STATIC_URL", "")
+
+        resolved_public = None
+        if static_url.startswith("https://") and ".internal" not in static_url:
+            resolved_public = static_url
+        elif public_domain:
+            resolved_public = f"https://{public_domain}"
+
+        if resolved_public:
+            needs_override = (
+                not self.webhook_base_url.startswith("https://")
+                or ".internal" in self.webhook_base_url
+                or "localhost" in self.webhook_base_url
+                or "127.0.0.1" in self.webhook_base_url
+            )
+            if needs_override:
+                self.webhook_base_url = resolved_public
+
+        # 2. Rewrite postgresql:// → postgresql+asyncpg:// for async compatibility
+        if self.database_url.startswith("postgresql://"):
+            self.database_url = self.database_url.replace(
+                "postgresql://", "postgresql+asyncpg://", 1
+            )
+
+        # 3. Fall back to a writable local SQLite path if /data doesn't exist
+        if self.database_url == "sqlite+aiosqlite:////data/aster_tracker.db":
+            import os as _os
+            if not _os.path.isdir("/data"):
+                self.database_url = "sqlite+aiosqlite:///./aster_tracker_dev.db"
+
+        return self
 
 
 @lru_cache(maxsize=1)

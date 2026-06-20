@@ -121,12 +121,15 @@ async def lifespan(app: FastAPI):
     _db_ready = False
     try:
         from pathlib import Path
-        db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
+        db_url = settings.database_url
+        logger.info("Resolved DATABASE_URL: %s", db_url)
+
+        db_path = db_url.replace("sqlite+aiosqlite:///", "")
         if db_path.startswith("/"):
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
         logger.info("Initializing database...")
-        init_db(settings.database_url)
+        init_db(db_url)
 
         # Auto-create all tables — safe no-op if they already exist.
         logger.info("Ensuring database schema is up to date...")
@@ -142,6 +145,7 @@ async def lifespan(app: FastAPI):
 
     # ── Telegram Bot ──────────────────────────────────────────────────────────
     logger.info("Setting up Telegram Bot client...")
+    logger.info("Resolved WEBHOOK_BASE_URL: %s", settings.webhook_base_url)
     bot = Bot(token=settings.telegram_bot_token)
     dp = Dispatcher()
     dp.include_router(bot_router)
