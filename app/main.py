@@ -106,23 +106,23 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
 
     # ── Database ──────────────────────────────────────────────────────────────
-    # Ensure the /data directory exists (Railway volume mount point).
-    # On local dev this creates a harmless /data dir or uses the fallback path.
-    import os
-    from pathlib import Path
-    db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
-    if db_path.startswith("/"):
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    try:
+        from pathlib import Path
+        db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
+        if db_path.startswith("/"):
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Initializing database...")
-    init_db(settings.database_url)
+        logger.info("Initializing database...")
+        init_db(settings.database_url)
 
-    # Auto-create all tables (safe no-op if tables already exist).
-    # On Railway we use SQLite on a persistent volume so Alembic CLI isn't needed.
-    logger.info("Ensuring database schema is up to date...")
-    from app.db.base import Base, _engine
-    async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        # Auto-create all tables — safe no-op if they already exist.
+        logger.info("Ensuring database schema is up to date...")
+        import app.db.base as _db_base
+        async with _db_base._engine.begin() as conn:
+            await conn.run_sync(_db_base.Base.metadata.create_all)
+    except Exception as exc:
+        logger.exception("Database initialisation failed: %s", exc)
+        # Continue — the healthcheck must pass even if DB setup has issues.
 
     # ── Telegram Bot ──────────────────────────────────────────────────────────
     logger.info("Setting up Telegram Bot client...")
@@ -131,22 +131,41 @@ async def lifespan(app: FastAPI):
     dp.include_router(bot_router)
 
     # Register the slash-command menu shown in the Telegram UI
-    from aiogram.types import BotCommand
-    await bot.set_my_commands([
-        BotCommand(command="start",   description="Welcome message & feature overview"),
-        BotCommand(command="track",   description="Track a wallet — /track <address> [label]"),
-        BotCommand(command="untrack", description="Stop tracking — /untrack <address>"),
-        BotCommand(command="list",    description="List all your tracked wallets"),
-        BotCommand(command="filters", description="Configure alerts — /filters <address>"),
-        BotCommand(command="help",    description="Show command reference"),
-    ])
+    try:
+        from aiogram.types import BotCommand
+        await bot.set_my_commands([
+            BotCommand(command="start",   description="Welcome message & feature overview"),
+            BotCommand(command="track",   description="Track a wallet — /track <address> [label]"),
+            BotCommand(command="untrack", description="Stop tracking — /untrack <address>"),
+            BotCommand(command="list",    description="List all your tracked wallets"),
+            BotCommand(command="filters", description="Configure alerts — /filters <address>"),
+            BotCommand(command="help",    description="Show command reference"),
+        ])
+        logger.info("Bot commands registered.")
+    except Exception as exc:
+        logger.warning("Could not register bot commands (non-fatal): %s", exc)
 
-    # Register Telegram webhook
-    logger.info("Registering Telegram webhook at %s", settings.telegram_webhook_url)
-    await bot.set_webhook(
-        url=settings.telegram_webhook_url,
-        secret_token=settings.telegram_webhook_secret,
-    )
+    # Register Telegram webhook — only when a real HTTPS URL is configured.
+    # On the first Railway deploy WEBHOOK_BASE_URL may not be set yet;
+    # the app must still start so the /health check passes.
+    webhook_url = settings.telegram_webhook_url
+    if webhook_url.startswith("https://"):
+        try:
+            logger.info("Registering Telegram webhook at %s", webhook_url)
+            await bot.set_webhook(
+                url=webhook_url,
+                secret_token=settings.telegram_webhook_secret,
+            )
+            logger.info("Telegram webhook registered successfully.")
+        except Exception as exc:
+            logger.warning("Telegram webhook registration failed (non-fatal): %s", exc)
+    else:
+        logger.warning(
+            "WEBHOOK_BASE_URL is not an HTTPS URL ('%s'). "
+            "Telegram webhook NOT registered — set WEBHOOK_BASE_URL in Railway Variables "
+            "and redeploy to activate incoming updates.",
+            settings.webhook_base_url,
+        )
 
     # ── Background workers ────────────────────────────────────────────────────
     # Start the rate-limited message worker
@@ -165,10 +184,11 @@ async def lifespan(app: FastAPI):
         )
     else:
         logger.warning(
-            "OPENSEA_API_KEY is empty. OpenSea live listings stream client will not be started."
+            "OPENSEA_API_KEY is empty. OpenSea live listings stream will not start."
         )
 
     yield
+
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
     logger.info("Shutting down workers and connections...")
