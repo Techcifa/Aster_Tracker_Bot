@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +20,25 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def resolve_webhook_base_url(self) -> Settings:
+        import os
+        public_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+        static_url = os.environ.get("RAILWAY_STATIC_URL")
+        # Prefer static_url if it starts with https://, otherwise use public_domain
+        resolved = None
+        if static_url and static_url.startswith("https://") and not ".internal" in static_url:
+            resolved = static_url
+        elif public_domain:
+            resolved = f"https://{public_domain}"
+
+        if resolved:
+            is_internal = ".internal" in self.webhook_base_url
+            is_local = "localhost" in self.webhook_base_url or "127.0.0.1" in self.webhook_base_url
+            if not self.webhook_base_url.startswith("https://") or is_internal or is_local:
+                self.webhook_base_url = resolved
+        return self
 
     # ── Telegram ──────────────────────────────────────────────────────────────
     telegram_bot_token: str

@@ -77,3 +77,25 @@ def test_webhook_valid_signature():
         
         # TestClient runs FastAPI background tasks synchronously before returning
         mock_process.assert_called_once_with(payload)
+
+
+def test_settings_webhook_url_resolution(monkeypatch):
+    """Verify that settings resolves the webhook base URL correctly on Railway."""
+    from app.config import Settings
+
+    # 1. By default, it uses the set value
+    monkeypatch.delenv("RAILWAY_PUBLIC_DOMAIN", raising=False)
+    monkeypatch.delenv("RAILWAY_STATIC_URL", raising=False)
+    settings = Settings(telegram_bot_token="token", webhook_base_url="https://mycustombot.com")
+    assert settings.webhook_base_url == "https://mycustombot.com"
+
+    # 2. If it's a private domain, and RAILWAY_PUBLIC_DOMAIN is set, it overrides it
+    monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "aster-tracker.up.railway.app")
+    settings = Settings(telegram_bot_token="token", webhook_base_url="http://astertrackerbot.railway.internal")
+    assert settings.webhook_base_url == "https://aster-tracker.up.railway.app"
+
+    # 3. If RAILWAY_STATIC_URL is set, it takes precedence
+    monkeypatch.setenv("RAILWAY_STATIC_URL", "https://static-url.up.railway.app")
+    settings = Settings(telegram_bot_token="token", webhook_base_url="http://localhost:8000")
+    assert settings.webhook_base_url == "https://static-url.up.railway.app"
+
