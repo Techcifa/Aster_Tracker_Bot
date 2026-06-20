@@ -149,15 +149,20 @@ async def lifespan(app: FastAPI):
     # Register the slash-command menu shown in the Telegram UI
     try:
         from aiogram.types import BotCommand
-        await bot.set_my_commands([
-            BotCommand(command="start",   description="Welcome message & feature overview"),
-            BotCommand(command="track",   description="Track a wallet — /track <address> [label]"),
-            BotCommand(command="untrack", description="Stop tracking — /untrack <address>"),
-            BotCommand(command="list",    description="List all your tracked wallets"),
-            BotCommand(command="filters", description="Configure alerts — /filters <address>"),
-            BotCommand(command="help",    description="Show command reference"),
-        ])
+        await asyncio.wait_for(
+            bot.set_my_commands([
+                BotCommand(command="start",   description="Welcome message & feature overview"),
+                BotCommand(command="track",   description="Track a wallet — /track <address> [label]"),
+                BotCommand(command="untrack", description="Stop tracking — /untrack <address>"),
+                BotCommand(command="list",    description="List all your tracked wallets"),
+                BotCommand(command="filters", description="Configure alerts — /filters <address>"),
+                BotCommand(command="help",    description="Show command reference"),
+            ]),
+            timeout=10.0
+        )
         logger.info("Bot commands registered.")
+    except asyncio.TimeoutError:
+        logger.warning("Timed out registering bot commands (non-fatal)")
     except Exception as exc:
         logger.warning("Could not register bot commands (non-fatal): %s", exc)
 
@@ -168,11 +173,16 @@ async def lifespan(app: FastAPI):
     if webhook_url.startswith("https://"):
         try:
             logger.info("Registering Telegram webhook at %s", webhook_url)
-            await bot.set_webhook(
-                url=webhook_url,
-                secret_token=settings.telegram_webhook_secret,
+            await asyncio.wait_for(
+                bot.set_webhook(
+                    url=webhook_url,
+                    secret_token=settings.telegram_webhook_secret,
+                ),
+                timeout=10.0
             )
             logger.info("Telegram webhook registered successfully.")
+        except asyncio.TimeoutError:
+            logger.warning("Timed out registering Telegram webhook (non-fatal)")
         except Exception as exc:
             logger.warning("Telegram webhook registration failed (non-fatal): %s", exc)
     else:
