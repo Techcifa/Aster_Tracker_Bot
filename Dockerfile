@@ -16,5 +16,7 @@ COPY . .
 # On Railway this directory is replaced by the mounted volume at runtime.
 RUN mkdir -p /data
 
-# Railway injects $PORT at runtime
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+# Railway injects $PORT at runtime; the default and EXPOSE value is 8080.
+# EXPOSE tells Railway's edge router (hikari) which port to forward external traffic to.
+EXPOSE 8080
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
