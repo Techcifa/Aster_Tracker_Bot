@@ -32,6 +32,18 @@ def init_db(database_url: str) -> None:
         class_=AsyncSession,
     )
 
+    if is_sqlite:
+        from sqlalchemy import event
+
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA busy_timeout=5000;")
+            cursor.close()
+
+        event.listen(_engine.sync_engine, "connect", set_sqlite_pragma)
+
+
 
 async def close_db() -> None:
     """Dispose the engine connection pool. Call on shutdown."""

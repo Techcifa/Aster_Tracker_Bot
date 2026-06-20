@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 
 from app.bot import bot_router
 from app.config import get_settings
@@ -246,10 +246,24 @@ app = FastAPI(lifespan=lifespan, title="Aster Tracker API")
 app.include_router(webhook_router)
 
 
+async def process_update(update_json: dict) -> None:
+    """Process the Telegram update in the background, logging any errors."""
+    global bot, dp
+    if not bot or not dp:
+        logger.error("Telegram services not ready. Cannot process background update.")
+        return
+    try:
+        update = Update.model_validate(update_json, context={"bot": bot})
+        await dp.feed_update(bot, update)
+    except Exception as e:
+        logger.exception("Error processing Telegram update in background: %s", e)
+
+
 @app.post(settings.telegram_webhook_path)
 async def telegram_webhook(request: Request):
     """
     Webserver endpoint to receive updates pushed from Telegram.
+    Acks first, processes in the background.
     """
     global bot, dp
     if not bot or not dp:
@@ -260,16 +274,16 @@ async def telegram_webhook(request: Request):
     if secret != settings.telegram_webhook_secret:
         raise HTTPException(status_code=403, detail="Invalid webhook secret")
 
-    # Feed updates into dispatch pipeline
     try:
         update_json = await request.json()
-        update = Update.model_validate(update_json, context={"bot": bot})
-        await dp.feed_update(bot, update)
     except Exception as e:
-        logger.exception("Error processing Telegram update: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.warning("Invalid JSON payload received at webhook: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    return {"status": "ok"}
+    # Fire-and-forget processing of the update in a background task
+    asyncio.create_task(process_update(update_json))
+
+    return Response(status_code=200)
 
 
 @app.get("/health")
