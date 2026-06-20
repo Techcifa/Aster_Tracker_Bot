@@ -38,7 +38,13 @@ class Settings(BaseSettings):
             is_local = "localhost" in self.webhook_base_url or "127.0.0.1" in self.webhook_base_url
             if not self.webhook_base_url.startswith("https://") or is_internal or is_local:
                 self.webhook_base_url = resolved
+
+        # Rewrite postgresql:// to postgresql+asyncpg:// for async compatibility
+        if self.database_url.startswith("postgresql://"):
+            self.database_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
         return self
+
 
     # ── Telegram ──────────────────────────────────────────────────────────────
     telegram_bot_token: str
