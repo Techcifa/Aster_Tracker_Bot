@@ -35,6 +35,13 @@ async def update_webhook_addresses(
     API note: field names are camelCase (addressesToAdd / addressesToRemove)
     and both arrays must always be present in the payload.
     """
+    if not auth_token or not webhook_id:
+        logger.warning(
+            "Alchemy credentials not configured (ALCHEMY_AUTH_TOKEN / ALCHEMY_WEBHOOK_ID). "
+            "Skipping webhook update — set these in Railway Variables."
+        )
+        return False
+
     # Alchemy requires camelCase keys and both arrays present (even if empty)
     payload: dict = {
         "webhook_id": webhook_id,
