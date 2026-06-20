@@ -37,8 +37,16 @@ bot: Bot | None = None
 dp: Dispatcher | None = None
 
 
+# Set to True only after init_db() + create_all succeed.
+# Guards the OpenSea stream and callbacks from running without a live DB.
+_db_ready: bool = False
+
+
 async def get_tracked_addresses() -> set[str]:
     """Callback for the OpenSea Stream client to fetch actively tracked addresses."""
+    if not _db_ready:
+        logger.warning("get_tracked_addresses called before DB is ready — returning empty set.")
+        return set()
     async with get_session() as session:
         addrs = await crud.get_all_tracked_addresses(session)
     return {a.lower() for a in addrs}
@@ -46,6 +54,9 @@ async def get_tracked_addresses() -> set[str]:
 
 async def handle_opensea_listing(maker_address: str, payload: dict) -> None:
     """Callback for the OpenSea Stream client when a listing is matched."""
+    if not _db_ready:
+        logger.warning("handle_opensea_listing called before DB is ready — skipping event.")
+        return
     # Parse NFT identifiers
     nft_id = payload.get("item", {}).get("nft_id", "")
     collection = ""
@@ -106,6 +117,8 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
 
     # ── Database ──────────────────────────────────────────────────────────────
+    global _db_ready
+    _db_ready = False
     try:
         from pathlib import Path
         db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
@@ -120,9 +133,12 @@ async def lifespan(app: FastAPI):
         import app.db.base as _db_base
         async with _db_base._engine.begin() as conn:
             await conn.run_sync(_db_base.Base.metadata.create_all)
+
+        _db_ready = True
+        logger.info("Database ready.")
     except Exception as exc:
         logger.exception("Database initialisation failed: %s", exc)
-        # Continue — the healthcheck must pass even if DB setup has issues.
+        # Continue — healthcheck must pass; OpenSea stream will NOT start (db_ready=False).
 
     # ── Telegram Bot ──────────────────────────────────────────────────────────
     logger.info("Setting up Telegram Bot client...")
@@ -171,9 +187,14 @@ async def lifespan(app: FastAPI):
     # Start the rate-limited message worker
     notifier_task = asyncio.create_task(start_notifier_worker(bot))
 
-    # Start the OpenSea Stream client if api key is provided
+    # Start the OpenSea Stream client only when DB is confirmed ready.
     opensea_task = None
-    if settings.opensea_api_key and settings.opensea_api_key.strip():
+    if not _db_ready:
+        logger.warning(
+            "OpenSea stream will NOT start because the database is not ready. "
+            "Fix DB initialisation errors and redeploy."
+        )
+    elif settings.opensea_api_key and settings.opensea_api_key.strip():
         logger.info("Starting OpenSea stream background listener...")
         opensea_task = asyncio.create_task(
             run_opensea_stream(
