@@ -89,24 +89,24 @@ async def handle_track(message: Message, command: CommandObject):
         await crud.create_subscription(session, user.id, wallet.id)
         await session.commit()
         
-    # Dynamically update the Alchemy address webhook
+    # Dynamically update the Alchemy address webhook (best-effort; non-blocking)
     settings = get_settings()
-    success = await alchemy_api.add_address(
+    alchemy_ok = await alchemy_api.add_address(
         auth_token=settings.alchemy_auth_token,
         webhook_id=settings.alchemy_webhook_id,
         address=address,
     )
-    
-    if success:
-        label_info = f"\nLabel: {label}" if label else ""
-        await message.answer(f"✅ Successfully tracking wallet: `{address}`{label_info}", parse_mode="Markdown")
-    else:
-        label_info = f"\nLabel: {label}" if label else ""
-        await message.answer(
-            f"⚠️ Tracked wallet locally: `{address}`{label_info}\n"
-            "Failed to register with the on-chain webhook tracker. Our admin team will look into it.",
-            parse_mode="Markdown"
+    if not alchemy_ok:
+        logger.warning(
+            "Alchemy webhook not updated for %s — on-chain events may be delayed until next sync.",
+            address,
         )
+
+    label_info = f"\nLabel: {label}" if label else ""
+    await message.answer(
+        f"✅ Now tracking wallet: `{address}`{label_info}",
+        parse_mode="Markdown",
+    )
 
 
 @router.message(Command("untrack"))

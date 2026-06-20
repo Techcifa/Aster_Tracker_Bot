@@ -44,7 +44,7 @@ async def update_webhook_addresses(
 
     # Alchemy requires camelCase keys and both arrays present (even if empty)
     payload: dict = {
-        "webhook_id": webhook_id,
+        "webhookId": webhook_id,
         "addressesToAdd": [a.lower() for a in (addresses_to_add or [])],
         "addressesToRemove": [a.lower() for a in (addresses_to_remove or [])],
     }
