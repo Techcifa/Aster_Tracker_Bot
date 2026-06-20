@@ -87,10 +87,13 @@ async def run_opensea_stream(
     """
     url = f"{_STREAM_URL}?token={api_key}&vsn=2.0.0"
     delay = _RECONNECT_DELAY_MIN
-    ref_counter = 1
 
     while True:
+        # ref_counter is reset each connection cycle so it never grows unbounded
+        ref_counter = 1
+        heartbeat_task: asyncio.Task | None = None
         logger.info("Connecting to OpenSea Stream WebSocket...")
+
         try:
             async with websockets.connect(
                 url,
@@ -103,11 +106,10 @@ async def run_opensea_stream(
                 delay = _RECONNECT_DELAY_MIN  # Reset backoff on successful connect
 
                 # Join the global collection channel
-                join_msg = _build_join_msg(ref_counter)
+                await ws.send(_build_join_msg(ref_counter))
                 ref_counter += 1
-                await ws.send(join_msg)
 
-                # Start heartbeat coroutine
+                # Start heartbeat — guaranteed to be cancelled in the finally below
                 heartbeat_task = asyncio.create_task(_heartbeat_loop(ws))
 
                 try:
@@ -116,14 +118,27 @@ async def run_opensea_stream(
                             raw_message, get_tracked_addrs, on_listing
                         )
                 finally:
-                    heartbeat_task.cancel()
-                    try:
-                        await heartbeat_task
-                    except asyncio.CancelledError:
-                        pass
+                    # Always cancel the heartbeat when the message loop exits
+                    # (normal close, exception, or CancelledError)
+                    if heartbeat_task and not heartbeat_task.done():
+                        heartbeat_task.cancel()
+                    if heartbeat_task:
+                        try:
+                            await heartbeat_task
+                        except (asyncio.CancelledError, Exception):
+                            pass
+                        heartbeat_task = None
 
         except asyncio.CancelledError:
             logger.info("OpenSea Stream task cancelled — shutting down.")
+            # Ensure heartbeat cleaned up even if CancelledError fires
+            # before heartbeat_task is assigned or its finally runs
+            if heartbeat_task and not heartbeat_task.done():
+                heartbeat_task.cancel()
+                try:
+                    await heartbeat_task
+                except (asyncio.CancelledError, Exception):
+                    pass
             return
         except ConnectionClosed as e:
             logger.warning("OpenSea Stream disconnected: %s. Reconnecting in %ds...", e, delay)
@@ -132,6 +147,7 @@ async def run_opensea_stream(
 
         await asyncio.sleep(delay)
         delay = min(delay * 2, _RECONNECT_DELAY_MAX)
+
 
 
 async def _handle_message(
