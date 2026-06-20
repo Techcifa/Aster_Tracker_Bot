@@ -31,12 +31,16 @@ async def update_webhook_addresses(
 
     Returns True on success, False on failure (logged — caller should proceed
     regardless to avoid blocking the user).
+
+    API note: field names are camelCase (addressesToAdd / addressesToRemove)
+    and both arrays must always be present in the payload.
     """
-    payload: dict = {"webhook_id": webhook_id}
-    if addresses_to_add:
-        payload["addresses_to_add"] = [a.lower() for a in addresses_to_add]
-    if addresses_to_remove:
-        payload["addresses_to_remove"] = [a.lower() for a in addresses_to_remove]
+    # Alchemy requires camelCase keys and both arrays present (even if empty)
+    payload: dict = {
+        "webhook_id": webhook_id,
+        "addressesToAdd": [a.lower() for a in (addresses_to_add or [])],
+        "addressesToRemove": [a.lower() for a in (addresses_to_remove or [])],
+    }
 
     headers = {
         "X-Alchemy-Token": auth_token,
