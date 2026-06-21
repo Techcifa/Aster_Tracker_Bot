@@ -86,14 +86,24 @@ async def handle_opensea_listing(maker_address: str, payload: dict) -> None:
 
         # Process active subscriptions
         subs = await crud.get_subscribers_for_wallet(session, maker_address)
+        logger.info(
+            "OpenSea listing %s: found %d subscriber(s) for %s",
+            event_key, len(subs), maker_address,
+        )
+        notified = 0
         for user, sub in subs:
             # Check toggles
             if not sub.notify_list_nft:
+                logger.info("Skipping listing for chat %d — notify_list_nft is off", user.telegram_chat_id)
                 continue
 
             # Check min value threshold
             value_eth = price_wei / 1e18
             if value_eth < float(sub.min_value_eth):
+                logger.info(
+                    "Skipping listing for chat %d — value %.4f ETH below threshold %.4f ETH",
+                    user.telegram_chat_id, value_eth, float(sub.min_value_eth),
+                )
                 continue
 
             # Format and send listing message
@@ -108,7 +118,10 @@ async def handle_opensea_listing(maker_address: str, payload: dict) -> None:
             )
             if msg:
                 await enqueue_message(user.telegram_chat_id, msg)
+                notified += 1
+                logger.info("Enqueued listing notification for chat %d", user.telegram_chat_id)
         await session.commit()
+        logger.info("OpenSea listing %s: notified %d chat(s).", event_key, notified)
 
 
 @asynccontextmanager

@@ -8,8 +8,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from sqlalchemy import delete, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import delete, func, insert as sa_insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import SeenEvent, Subscription, TrackedWallet, User
@@ -19,20 +18,15 @@ from app.db.models import SeenEvent, Subscription, TrackedWallet, User
 
 async def upsert_user(session: AsyncSession, chat_id: int) -> User:
     """Insert user if not present; return the User row."""
-    stmt = (
-        pg_insert(User)
-        .values(telegram_chat_id=chat_id)
-        .on_conflict_do_nothing(index_elements=["telegram_chat_id"])
-        .returning(User)
+    # Use dialect-agnostic upsert: try to select first, then insert if missing.
+    row = await session.scalar(
+        select(User).where(User.telegram_chat_id == chat_id)
     )
-    result = await session.execute(stmt)
-    await session.flush()
-    row = result.scalar_one_or_none()
     if row is None:
-        row = await session.scalar(
-            select(User).where(User.telegram_chat_id == chat_id)
-        )
-    return row  # type: ignore[return-value]
+        row = User(telegram_chat_id=chat_id)
+        session.add(row)
+        await session.flush()
+    return row
 
 
 async def get_user_by_chat_id(session: AsyncSession, chat_id: int) -> User | None:
@@ -47,25 +41,27 @@ async def upsert_wallet(
     session: AsyncSession, address: str, label: str | None = None
 ) -> TrackedWallet:
     """Insert wallet if not present (address is the unique key)."""
-    stmt = (
-        pg_insert(TrackedWallet)
-        .values(address=address, label=label)
-        .on_conflict_do_update(
-            index_elements=["address"],
-            set_={"label": label} if label else {"address": address},
-        )
-        .returning(TrackedWallet)
+    row = await session.scalar(
+        select(TrackedWallet).where(TrackedWallet.address == address)
     )
-    result = await session.execute(stmt)
-    await session.flush()
-    return result.scalar_one()
+    if row is None:
+        row = TrackedWallet(address=address, label=label)
+        session.add(row)
+        await session.flush()
+    elif label:
+        row.label = label
+        await session.flush()
+    return row
 
 
 async def get_wallet_by_address(
     session: AsyncSession, address: str
 ) -> TrackedWallet | None:
+    # Case-insensitive: OpenSea sends lowercase, DB stores checksummed.
     return await session.scalar(
-        select(TrackedWallet).where(TrackedWallet.address == address)
+        select(TrackedWallet).where(
+            func.lower(TrackedWallet.address) == address.lower()
+        )
     )
 
 
@@ -93,23 +89,17 @@ async def get_wallets_with_listing_subscribers(
 async def create_subscription(
     session: AsyncSession, user_id: int, wallet_id: int
 ) -> Subscription:
-    stmt = (
-        pg_insert(Subscription)
-        .values(user_id=user_id, wallet_id=wallet_id)
-        .on_conflict_do_nothing(index_elements=["user_id", "wallet_id"])
-        .returning(Subscription)
-    )
-    result = await session.execute(stmt)
-    await session.flush()
-    row = result.scalar_one_or_none()
-    if row is None:
-        row = await session.scalar(
-            select(Subscription).where(
-                Subscription.user_id == user_id,
-                Subscription.wallet_id == wallet_id,
-            )
+    row = await session.scalar(
+        select(Subscription).where(
+            Subscription.user_id == user_id,
+            Subscription.wallet_id == wallet_id,
         )
-    return row  # type: ignore[return-value]
+    )
+    if row is None:
+        row = Subscription(user_id=user_id, wallet_id=wallet_id)
+        session.add(row)
+        await session.flush()
+    return row
 
 
 async def delete_subscription(
@@ -159,12 +149,14 @@ async def get_subscription(
 async def get_subscribers_for_wallet(
     session: AsyncSession, wallet_address: str
 ) -> list[tuple[User, Subscription]]:
-    """Return all (User, Subscription) pairs for a given wallet address."""
+    """Return all (User, Subscription) pairs for a given wallet address.
+    Case-insensitive: OpenSea sends lowercase, DB stores checksummed.
+    """
     result = await session.execute(
         select(User, Subscription)
         .join(Subscription, Subscription.user_id == User.id)
         .join(TrackedWallet, TrackedWallet.id == Subscription.wallet_id)
-        .where(TrackedWallet.address == wallet_address)
+        .where(func.lower(TrackedWallet.address) == wallet_address.lower())
     )
     return list(result.tuples().all())
 
@@ -178,12 +170,11 @@ async def try_insert_seen_event(
     Attempt to insert an event_key. Returns True if newly inserted (first time
     seeing this event), False if already exists (duplicate — skip notification).
     """
-    stmt = (
-        pg_insert(SeenEvent)
-        .values(event_key=event_key, event_type=event_type)
-        .on_conflict_do_nothing(index_elements=["event_key"])
-        .returning(SeenEvent.id)
+    existing = await session.scalar(
+        select(SeenEvent.id).where(SeenEvent.event_key == event_key)
     )
-    result = await session.execute(stmt)
+    if existing is not None:
+        return False
+    session.add(SeenEvent(event_key=event_key, event_type=event_type))
     await session.flush()
-    return result.scalar_one_or_none() is not None
+    return True
