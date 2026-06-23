@@ -20,10 +20,20 @@ router = APIRouter(prefix="/webhook", tags=["webhooks"])
 
 
 def validate_signature(body: bytes, header_sig: str | None, signing_key: str) -> None:
-    """Validate that the incoming request signature matches the signing key."""
+    """Validate that the incoming request signature matches the signing key.
+
+    Alchemy signing keys are hex-encoded strings (e.g. "aabbcc1234...").
+    They must be decoded from hex to raw bytes before use as an HMAC key.
+    Falls back to UTF-8 encoding for local-dev dummy keys that are not valid hex.
+    """
     if not header_sig:
         raise HTTPException(status_code=401, detail="Missing signature header")
-    computed = hmac.new(signing_key.encode(), body, hashlib.sha256).hexdigest()
+    try:
+        key_bytes = bytes.fromhex(signing_key)
+    except ValueError:
+        # Non-hex key (e.g. local-dev placeholder) — treat as UTF-8
+        key_bytes = signing_key.encode()
+    computed = hmac.new(key_bytes, body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(computed, header_sig):
         raise HTTPException(status_code=403, detail="Invalid signature")
 
